@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Integration Dashboard</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+/* General Styles */
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #3498db36;
+    margin: 0;
+    padding: 20px;
+    color: #333;
+}
+
+h1 {
+    text-align: center;
+    color: #2c3e50;
+    margin-bottom: 20px;
+    font-size: 2.5em;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 20px;
+    background-color: #3498db2a;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* File Upload Section */
+.upload-section {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.upload-section input[type="file"] {
+    display: none;
+}
+
+.upload-section label {
+    background-color: #3498db;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s ease;
+}
+
+.upload-section label:hover {
+    background-color: #2980b9;
+}
+
+.upload-section button {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    margin-left: 10px;
+    transition: background-color 0.3s ease;
+}
+
+.upload-section button:hover {
+    background-color: #2980b9;
+}
+
+/* Chart Section */
+.chart-section {
+    margin-bottom: 30px;
+    background: #ecf0f1;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Table Section */
+.table-section {
+    margin-bottom: 30px;
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+th, td {
+    padding: 12px 15px;
+    text-align: left;
+}
+
+th {
+    background-color: #3498db;
+    color: white;
+    font-weight: bold;
+}
+
+tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+tr:hover {
+    background-color: #f1f1f1;
+}
+
+/* Export Button Section */
+.export-section {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.export-section button {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background-color 0.3s ease;
+}
+
+.export-section button:hover {
+    background-color: #2980b9;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    h1 {
+        font-size: 2em;
+    }
+
+    .upload-section label, .upload-section button, .export-section button {
+        width: 100%;
+        margin: 10px 0;
+    }
+
+    .upload-section button {
+        margin-left: 0;
+    }
+}
+    </style>
+</head>
+<body>
+    <h1>Data Integration Dashboard</h1>
+
+    <div class="container">
+        <!-- File Upload Section -->
+        <div class="upload-section">
+            <label for="csvFiles">Choose CSV Files</label>
+            <input type="file" id="csvFiles" accept=".csv" multiple>
+            <button onclick="uploadCSV()">Upload CSV Files</button>
+        </div>
+
+        <!-- Integration Accuracy Chart -->
+        <div class="chart-section">
+            <canvas id="accuracyChart"></canvas>
+        </div>
+
+        <!-- Data Table -->
+        <div class="table-section">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <!-- Table headers will be populated dynamically -->
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Table rows will be populated dynamically -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Export Button -->
+        <div class="export-section">
+            <button onclick="exportCSV()">Export Integrated Data</button>
+        </div>
+    </div>
+
+    <script >
+        let chart;
+let tableData = [];
+
+// Function to upload multiple CSV files
+async function uploadCSV() {
+    const fileInput = document.getElementById('csvFiles');
+    const files = fileInput.files;
+
+    if (!files || files.length === 0) {
+        alert('Please select at least one CSV file.');
+        return;
+    }
+
+    const formData = new FormData();
+    for (const file of files) {
+        formData.append('csvFiles', file);
+    }
+
+    try {
+        const response = await fetch('http://localhost:3001/upload', {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Server error: ${errorText}`);
+        }
+
+        const result = await response.json();
+        tableData = result.data;
+
+        // Update the table
+        renderTable(tableData);
+
+        // Update the chart
+        updateChart(result.accuracy);
+    } catch (error) {
+        console.error('Error uploading files:', error);
+        alert('Failed to upload files. Check the console for details.');
+    }
+}
+
+// Function to render the data table
+function renderTable(data) {
+    const table = document.getElementById('dataTable');
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+
+    // Clear existing content
+    thead.innerHTML = '';
+    tbody.innerHTML = '';
+
+    // Create table headers
+    const headers = Object.keys(data[0]);
+    const headerRow = document.createElement('tr');
+    headers.forEach((header) => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+
+    // Create table rows
+    data.forEach((row) => {
+        const tr = document.createElement('tr');
+        headers.forEach((header) => {
+            const td = document.createElement('td');
+            td.textContent = row[header];
+            tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+    });
+}
+
+// Function to update the chart
+function updateChart(accuracy) {
+    const ctx = document.getElementById('accuracyChart').getContext('2d');
+
+    if (chart) {
+        chart.destroy();
+    }
+
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Integration Accuracy'],
+            datasets: [{
+                label: 'Accuracy (%)',
+                data: [accuracy],
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 2,
+            }],
+        },
+        options: {
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                },
+            },
+        },
+    });
+}
+
+// Function to export integrated data as CSV
+async function exportCSV() {
+    if (tableData.length === 0) {
+        alert('No data to export.');
+        return;
+    }
+
+    try {
+        const response = await fetch('http://localhost:3001/export', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ data: tableData }),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Server error: ${errorText}`);
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'integrated_data.csv';
+        a.click();
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Error exporting data:', error);
+    }
+}
+    </script>
+</body>
+</html>
